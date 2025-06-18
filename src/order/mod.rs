@@ -1,9 +1,18 @@
 use crate::coffee::Coffee;
+use crate::price::Price;
+use std::fmt;
 
 // 구조체(struct) 정의 - 관련된 데이터를 그룹화
+#[derive(Debug, Clone)]
 pub struct OrderItem {
     pub coffee: Coffee, // Coffee enum 타입의 필드
     pub quantity: u32,  // 부호 없는 32비트 정수
+}
+
+impl fmt::Display for OrderItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} x {} - {}", self.coffee, self.quantity, self.line_total())
+    }
 }
 
 impl OrderItem {
@@ -19,15 +28,27 @@ impl OrderItem {
     }
 
     // 라인 총액 계산 메서드
-    pub fn line_total(&self) -> u32 {
+    pub fn line_total(&self) -> Price {
         // 메서드 체이닝 - coffee의 get_price() 호출 후 quantity와 곱셈
         self.coffee.get_price() * self.quantity
     }
 }
 
 // 주문을 나타내는 구조체
+#[derive(Debug)]
 pub struct Order {
     items: Vec<OrderItem>, // OrderItem들의 벡터 (동적 배열)
+}
+
+impl fmt::Display for Order {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "=== 주문 내역 ===")?;
+        for item in &self.items {
+            writeln!(f, "{}", item)?;
+        }
+        writeln!(f, "====================")?;
+        write!(f, "Total: {}", self.get_total())
+    }
 }
 
 impl Order {
@@ -42,32 +63,52 @@ impl Order {
         &self.items
     }
 
-    // 전체 주문 금액 계산
-    pub fn get_total(&self) -> u32 {
-        let mut total = 0; // 가변 변수 선언
-        // for 루프로 벡터의 각 아이템에 대해 반복
-        // &self.items - items에 대한 불변 참조
-        for item in &self.items {
-            let line_total = item.line_total();
-            total += line_total // 누적 합계
-        }
-        total // 마지막 표현식이 반환값 (세미콜론 없음)
+    // 전체 주문 금액 계산 - 함수형 프로그래밍 스타일
+    pub fn get_total(&self) -> Price {
+        self.items
+            .iter()
+            .map(|item| item.line_total())
+            .sum()
     }
 
-    // 주문 정보 출력 메서드
+    // 주문 정보 출력 메서드 - Display trait을 활용
     pub fn print_order_info(&self) {
-        // 각 아이템에 대해 반복하며 정보 출력
-        for item in &self.items {
-            let line_total = item.line_total();
-            // println! 매크로 사용 - 콘솔에 출력
-            println!(
-                "{} x {} - {}",
-                item.coffee.get_name(), // 커피 이름
-                item.quantity,          // 수량
-                line_total              // 라인 총액
-            );
-        }
-        // 전체 총액 출력
-        println!("Total: {}", &self.get_total())
+        println!("{}", self);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::coffee::{Coffee, Size};
+
+    #[test]
+    fn test_order_item_creation() {
+        let coffee = Coffee::Espresso;
+        let item = OrderItem::new(coffee, 2).unwrap();
+        assert_eq!(item.quantity, 2);
+        assert_eq!(item.line_total(), Price::new(4000)); // 2000 * 2
+    }
+
+    #[test]
+    fn test_order_item_invalid_quantity() {
+        let coffee = Coffee::Cappuccino;
+        let result = OrderItem::new(coffee, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_order_total() {
+        let item1 = OrderItem::new(Coffee::Espresso, 1).unwrap(); // 2000
+        let item2 = OrderItem::new(Coffee::Latte(Size::Large), 2).unwrap(); // 2700 * 2 = 5400
+        let order = Order::new(vec![item1, item2]);
+        
+        assert_eq!(order.get_total(), Price::new(7400));
+    }
+
+    #[test]
+    fn test_empty_order() {
+        let order = Order::new(vec![]);
+        assert_eq!(order.get_total(), Price::new(0));
     }
 }
